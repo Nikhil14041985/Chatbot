@@ -1,7 +1,7 @@
 streamlit
 PyPDF2
+requests
 langchain
 langchain-community
-faiss-cpu
 openai
-requests
+faiss-cpu
