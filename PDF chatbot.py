@@ -10,7 +10,7 @@ from langchain_community.chat_models import ChatOpenAI
 
 # ✅ Your OpenAI API Key (set this via secrets or env var in production)
 
-st.secrets["openai"]["api_key"]
+OPENAI_API_KEY = st.secrets["openai"]["api_key"]
 
 # ✅ Link to your GitHub PDF (RAW link)
 GITHUB_PDF_URL = "https://raw.githubusercontent.com/Nikhil14041985/Chatbot/Main/Constitution_India_subset.pdf"
