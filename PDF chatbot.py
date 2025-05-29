@@ -1,63 +1,74 @@
 import streamlit as st
 import requests
-from io import BytesIO
 from PyPDF2 import PdfReader
+from io import BytesIO
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains.question_answering import load_qa_chain
 from langchain_community.chat_models import ChatOpenAI
 
-# ✅ Your OpenAI API Key (set this via secrets or env var in production)
+# Load API key securely from Streamlit secrets
+try:
+    OPENAI_API_KEY = st.secrets["openai"]["api_key"]
+except Exception:
+    st.error("Please add your OpenAI API key in Streamlit secrets.")
+    st.stop()
 
-OPENAI_API_KEY = st.secrets["openai"]["api_key"]
+st.header("📄 Chat with a GitHub PDF")
 
-# ✅ Link to your GitHub PDF (RAW link)
+# Example hosted PDF (raw GitHub URL)
 GITHUB_PDF_URL = "https://raw.githubusercontent.com/Nikhil14041985/Chatbot/Main/Constitution_India_subset.pdf"
 
-st.title("📄 Chat with Constitution of India")
+with st.sidebar:
+    st.title("Document Source")
+    use_github_pdf = st.checkbox("Use hosted GitHub PDF", value=True)
 
-# Download PDF from GitHub
-response = requests.get(GITHUB_PDF_URL)
-if response.status_code != 200:
-    st.error("Failed to fetch PDF from GitHub.")
+# Load PDF from GitHub or allow user upload
+if use_github_pdf:
+    with st.spinner("Downloading PDF from GitHub..."):
+        response = requests.get(GITHUB_PDF_URL)
+        file = BytesIO(response.content)
 else:
-    with st.spinner("Reading PDF from GitHub..."):
-        pdf_reader = PdfReader(BytesIO(response.content))
-        text = ""
-        for page in pdf_reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text
+    file = st.file_uploader("Upload a PDF file", type="pdf")
 
-        # Check if text is extractable
-        if not text.strip():
-            st.error("No text found in the PDF.")
-        else:
-            # Split the text
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000,
-                chunk_overlap=150
-            )
-            chunks = text_splitter.split_text(text)
+if file:
+    pdf_reader = PdfReader(file)
+    text = ""
+    for page in pdf_reader.pages:
+        content = page.extract_text()
+        if content:
+            text += content
 
-            # Generate embeddings
-            embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-            vector_store = FAISS.from_texts(chunks, embeddings)
+    if text.strip() == "":
+        st.error("No extractable text found in the PDF.")
+    else:
+        # Split text into chunks
+        text_splitter = RecursiveCharacterTextSplitter(
+            separators=["\n"],
+            chunk_size=1000,
+            chunk_overlap=150,
+            length_function=len,
+        )
+        chunks = text_splitter.split_text(text)
 
-            # Input question
-            user_question = st.text_input("❓ Ask a question:")
+        # Create embeddings
+        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+        vector_store = FAISS.from_texts(chunks, embeddings)
 
-            if user_question:
-                with st.spinner("Thinking..."):
-                    matches = vector_store.similarity_search(user_question)
-                    llm = ChatOpenAI(
-                        openai_api_key=OPENAI_API_KEY,
-                        temperature=0,
-                        model_name="gpt-3.5-turbo"
-                    )
-                    chain = load_qa_chain(llm, chain_type="stuff")
-                    answer = chain.run(input_documents=matches, question=user_question)
-                    st.success("Answer:")
-                    st.write(answer)
+        # Ask question
+        user_question = st.text_input("❓ Ask a question about the document:")
+
+        if user_question:
+            with st.spinner("Thinking..."):
+                matches = vector_store.similarity_search(user_question)
+                llm = ChatOpenAI(
+                    openai_api_key=OPENAI_API_KEY,
+                    temperature=0,
+                    model_name="gpt-3.5-turbo",
+                )
+                chain = load_qa_chain(llm, chain_type="stuff")
+                response = chain.run(input_documents=matches, question=user_question)
+                st.success("Answer:")
+                st.write(response)
 
