@@ -56,7 +56,7 @@ st.markdown("---")
 # Sidebar: Source + Prompts
 with st.sidebar:
     st.title("📘 Explore the Constitution")
-    use_github = st.checkbox("Use PDF from GitHub", value=True)
+    use_github = st.checkbox("Indian Constitution PDF"/"*Untick this box to select pdf from your computer", value=True)
     if not use_github:
         file = st.file_uploader("📂 Upload your PDF", type="pdf")
 
