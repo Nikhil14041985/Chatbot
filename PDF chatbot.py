@@ -15,12 +15,12 @@ except Exception:
     st.stop()
 
 st.set_page_config(page_title="PDF Chatbot", layout="wide")
-st.header("📄 Chat with a PDF")
+st.header("📄 Know about Indian constitution")
 
 # Use GitHub PDF or Upload
 with st.sidebar:
     st.title("Select Document")
-    use_github = st.checkbox("Use PDF from GitHub", value=True)
+    use_github = st.checkbox("Indian constitution", value=True)
     if not use_github:
         file = st.file_uploader("Upload your PDF", type="pdf")
 
