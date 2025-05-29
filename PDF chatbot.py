@@ -1,12 +1,11 @@
 import streamlit as st
+import requests
 from PyPDF2 import PdfReader
+from io import BytesIO
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains.question_answering import load_qa_chain
-from langchain_community.chat_models import ChatOpenAI
-import requests
-from io import BytesIO
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 
 # Load OpenAI key securely from Streamlit secrets
 try:
@@ -15,103 +14,112 @@ except Exception:
     st.error("Please add your OpenAI API key in Streamlit secrets.")
     st.stop()
 
-# --- Custom Page Config and Styling ---
+# Streamlit page config
 st.set_page_config(page_title="Chat with Indian Constitution", page_icon="📜", layout="wide")
 
-# Inject custom CSS
+# --- Custom Styling for Indian Constitution Theme ---
 st.markdown("""
     <style>
-    body {background-color: #fff;}
-    .main {
-        background-color: #ffffff;
-        color: #000000;
-        font-family: 'Segoe UI', sans-serif;
-    }
-    .block-container {
-        padding: 2rem;
-    }
-    .title {
-        text-align: center;
-        color: #0F52BA;
-        font-size: 2.5rem;
-        margin-bottom: 0.5rem;
-    }
-    .ashoka {
-        width: 80px;
-        display: block;
-        margin-left: auto;
-        margin-right: auto;
-        margin-bottom: 10px;
-    }
-    .sidebar .sidebar-content {
-        background-color: #f4f4f4;
-        border-right: 4px solid #138808;
-        padding: 1rem;
-    }
+        .main {
+            background-color: #fffbe6;
+            font-family: 'Georgia', serif;
+            color: #222;
+        }
+        .title {
+            text-align: center;
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #1a4d2e;
+        }
+        .ashoka {
+            width: 80px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+            margin-bottom: 0.5rem;
+        }
+        .sidebar .sidebar-content {
+            background-color: #f4f4f4;
+            border-left: 6px solid #138808;
+        }
+        .block-container {
+            padding-top: 2rem;
+        }
     </style>
 """, unsafe_allow_html=True)
 
-# --- Title Section ---
+# --- Header with Ashoka Chakra and Title ---
 st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Ashoka_Chakra.svg/2048px-Ashoka_Chakra.svg.png", width=80)
 st.markdown("<div class='title'>Chat with the Indian Constitution 🇮🇳</div>", unsafe_allow_html=True)
-st.divider()
+st.markdown("---")
 
-# --- Sidebar Section ---
+# Sidebar: Source + Prompts
 with st.sidebar:
-    st.subheader("📘 Document Summary")
+    st.title("📘 Explore the Constitution")
+    use_github = st.checkbox("Use PDF from GitHub", value=True)
+    if not use_github:
+        file = st.file_uploader("📂 Upload your PDF", type="pdf")
+
+    # Prompts
+    st.markdown("### 💡 Try Asking:")
     st.markdown("""
-    This document is a curated version of the **Indian Constitution**.
-    
-    Use this app to ask questions and explore the content interactively.
+    - *What are the fundamental duties?*  
+    - *What is the meaning of Article 21?*  
+    - *Summarize the Preamble.*  
+    - *Explain Directive Principles of State Policy.*
     """)
 
-    st.subheader("💡 Try asking:")
-    st.markdown("""
-    - What is Article 370 about?
-    - When was the Indian Constitution adopted?
-    - What are the Fundamental Rights?
-    - Tell me about Directive Principles of State Policy.
-    """)
+# Load file from GitHub or uploaded file
+if use_github:
+    GITHUB_PDF_URL = "https://raw.githubusercontent.com/Nikhil14041985/Chatbot/Main/Constitution_India_subset.pdf"
+    response = requests.get(GITHUB_PDF_URL)
+    file = BytesIO(response.content)
 
-    file = st.file_uploader("📎 Upload your Constitution PDF", type="pdf")
-
-# --- PDF Handling ---
-if file is not None:
-    with st.spinner("⏳ Processing document..."):
-        reader = PdfReader(file)
-        raw_text = ""
-        for page in reader.pages:
+# --- Process the PDF ---
+if file:
+    with st.spinner("📖 Reading the PDF..."):
+        pdf_reader = PdfReader(file)
+        text = ""
+        for page in pdf_reader.pages:
             content = page.extract_text()
             if content:
-                raw_text += content
+                text += content
 
-    if raw_text.strip() == "":
-        st.error("⚠️ Could not extract text from the PDF.")
+    if text.strip() == "":
+        st.error("⚠️ No text found in the PDF.")
     else:
-        # Text Splitting
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=150
-        )
-        chunks = text_splitter.split_text(raw_text)
+        # Text splitting
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+        chunks = splitter.split_text(text)
 
-        # Embedding & Vector DB
-        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-        vector_store = FAISS.from_texts(chunks, embeddings)
+        # --- Generate summary for sidebar ---
+        summary = ""
+        with st.spinner("🧾 Summarizing document..."):
+            summary_input = " ".join(chunks[:3])
+            summary_llm = ChatOpenAI(temperature=0.3, model="gpt-3.5-turbo", api_key=OPENAI_API_KEY)
+            summary_chain = load_qa_chain(summary_llm, chain_type="stuff")
+            summary = summary_chain.run(input_documents=[], question=f"Summarize this in 3 lines: {summary_input}")
 
-        # --- QA Interface ---
-        st.subheader("💬 Ask a question:")
-        user_question = st.text_input("Type your question here...")
+        # Sidebar Summary
+        with st.sidebar:
+            st.markdown("### 🧾 Brief Summary")
+            st.info(summary)
 
-        if user_question:
-            with st.spinner("🤖 Generating answer..."):
-                matches = vector_store.similarity_search(user_question)
-                llm = ChatOpenAI(
-                    openai_api_key=OPENAI_API_KEY,
-                    temperature=0,
-                    model_name="gpt-3.5-turbo"
-                )
+        # --- Embedding and Search Setup ---
+        embeddings = OpenAIEmbeddings(api_key=OPENAI_API_KEY)
+        vector_store = FAISS.from_texts(chunks, embedding=embeddings)
+
+        # --- Main QA interface ---
+        st.subheader("❓ Ask a Question from the Constitution")
+        user_q = st.text_input("Type your question here:")
+
+        if user_q:
+            with st.spinner("🤖 Fetching answer..."):
+                matches = vector_store.similarity_search(user_q)
+                llm = ChatOpenAI(temperature=0, model="gpt-3.5-turbo", api_key=OPENAI_API_KEY)
                 chain = load_qa_chain(llm, chain_type="stuff")
-                answer = chain.run(input_documents=matches, question=user_question)
-                st.success("✅ Answer:")
+                answer = chain.run(input_documents=matches, question=user_q)
+
+                st.success("✅ Answer")
                 st.markdown(f"**{answer}**")
+
