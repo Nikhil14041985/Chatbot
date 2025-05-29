@@ -12,7 +12,7 @@ from io import BytesIO
 OPENAI_API_KEY = "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"  # replace with your actual key
 
 # Load PDF from GitHub (optional default)
-GITHUB_PDF_URL = Constitution_India_subset.pdf
+GITHUB_PDF_URL = "https://github.com/Nikhil14041985/Chatbot/blob/Main/Constitution_India_subset.pdf"
 
 st.header("📄 Chat with your PDF")
 
