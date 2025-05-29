@@ -1,7 +1,6 @@
 streamlit
 PyPDF2
-requests
 langchain
 langchain-community
-openai
 faiss-cpu
+openai  # ✅ This is the one that's missing!
